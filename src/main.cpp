@@ -55,6 +55,10 @@ const byte LOOP_COR_FACT = 1000 / LOOP_TIME; // Korrekturfaktor Anzahl der Runde
 #else
 #define RUN_ON_TIME 30
 #endif
+
+#define BRIGHTNESS 10
+
+// calculating constants
 const byte PUMP_LAP_COUNT = RUN_ON_TIME * LOOP_COR_FACT;  // NAchlaufzeit der Pumpe in loop zyklen
 
 // Autoreset, nach dieser Anzahl der Runden wird
@@ -87,7 +91,7 @@ void setup() {
   wdt_enable(WDTO_4S);
 
   strip.begin();
-  strip.setBrightness(50);
+  strip.setBrightness(BRIGHTNESS);
   strip.show(); // Initialize all pixels to 'off'
 }
 
@@ -121,7 +125,7 @@ void loop() {
 
 // do the automatic pump operation
 void doAutoPump() {
-  digitalWrite(LED_AUTO, atMode);
+  digitalWrite(LED_AUTO, !atMode);
   if(atMode && !mnPump) {
     if(flFull && !tkFull) {
       ppCounter = PUMP_LAP_COUNT;
@@ -181,7 +185,7 @@ void doAutoRestart() {
 
 byte getTankLevel() {
   word lvl = analogRead(SEN_TANK_FLOAT);
-  return byte(map(lvl, 0, 4096, 0, 100));
+  return byte(map(lvl, 0, 1024, 0, 100));
 }
 
 // schalte Pumpe aus
@@ -196,6 +200,8 @@ void ledOff() {
   digitalWrite(LED_TANK_FULL, 0);
   digitalWrite(LED_FILTER_FULL, 0);
   digitalWrite(LED_AUTO, 0);
+  strip.clear();
+  strip.show();
 }
 
 // Ist die Hauptwassertonne schon voll?
@@ -226,16 +232,16 @@ void doStrip() {
   byte lvl = map(tkLvl, 0, 100, 0, LED_STRIP_COUNT);
   for (byte i = 0; i < LED_STRIP_COUNT; i++) {
     if (i <= lvl) {
-      strip.setPixelColor(i, strip.Color(0,255,0));
+      strip.setPixelColor(LED_STRIP_COUNT-i-1, strip.Color(0,255,0));
     } else {
-      strip.setPixelColor(i, 0);
+      strip.setPixelColor(LED_STRIP_COUNT-i-1, 0);
     }
   }
   if (flFull) {
-      strip.setPixelColor(LED_STRIP_COUNT-1, strip.Color(255,0,0));
+      strip.setPixelColor(0, strip.Color(255,0,0));
   }
   if (pump) {
-      strip.setPixelColor(0, strip.Color(0,0,255));
+      strip.setPixelColor(LED_STRIP_COUNT-1, strip.Color(0,0,255));
   }
   strip.show();
 }
