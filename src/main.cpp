@@ -1,11 +1,14 @@
 /*
    Diese kleine Programm dient dazu eine Wassertonne mit Vorfilteranlage zu
    steuern. Folgende Funktionen übernimmt das Programm.
-
+  
+  Version 2
    - Wenn Vorfilter voll und Hauptspeicher nicht voll, starten einer Wasserpumpe
    mit Nachlaufzeit.
-   - Pumpe wird direkt ausgeschaltet wenn Hauptspeicher voll.
+   - Pumpe wird direkt ausgeschaltet, wenn Hauptspeicher voll.
    - Watchdog falls System in einem undefinerten Zustand gerät.
+   - Anzeige der Füllung auf einee Balkenanzeige (8x RGB LEDs)
+   - neuer Wasserstandssensor mit Piezo
 
    Historie
    WKLA 13.07.2018
@@ -17,7 +20,9 @@
    - erste Version
 
    WKLA 07.06.2023
-   - neue Version
+   - Version 2 für ATTiny84
+   - Piezo-Wasserstandssensor
+   - eigene Platine
 */
 #include "main.h"
 #include <avr/wdt.h>
@@ -37,8 +42,7 @@ const byte LED_PUMP = 5;         // LED parallel zur Pumpe
 const byte LED_TANK_FULL = 6;    // LED zeigt den Speicherstatus an
 const byte LED_FILTER_FULL = 9;  // LED zeigt den Filterstand an
 const byte LED_AUTO = 7;         // LED für utomatikmodus
-const byte LED_STRIP = 8;       // LED Zeile für die analoge Level Ausgabe
-const byte LED_STRIP_COUNT = 8;
+const byte LED_STRIP_PIN = 8;        // LED Zeile für die analoge Level Ausgabe
 // Eingänge
 const byte SEN_TANK_FULL = 0;    // Sensor Tank voll
 const byte SEN_FILTER_FULL = 1;  // Sensor Vorfilter voll
@@ -46,9 +50,15 @@ const byte SWT_PUMP_MAN = 10;    // Taster manueller Pumpen Betrieb: active = lo
 const byte SWT_AUTO_MAN = 2;     // Schalter manueller Betrieb: low = man / high = auto
 const byte SEN_TANK_FLOAT = A3;  // Sensor Tank analoges Signal zur Tankfüllung
 
-// Verzögerung einer Loop in msec
+// Anzahl der LEDs im Balken
+const byte LED_STRIP_COUNT = 8;
+
+// Mindestverzögerung einer Loop in msec
+// Die eigentliche Verarbeitung im Programm wird bei dieser Zeit nicht berücksichtigt
 #define LOOP_TIME 250
-const byte LOOP_COR_FACT = 1000 / LOOP_TIME; // Korrekturfaktor Anzahl der Runden pro Sekunde
+
+// Korrekturfaktor Anzahl der Runden pro Sekunde
+const byte LOOP_COR_FACT = 1000 / LOOP_TIME; 
 // Nachlaufzeit der Pumpe in Sekunden
 #ifdef debug
 #define RUN_ON_TIME 3
@@ -56,20 +66,22 @@ const byte LOOP_COR_FACT = 1000 / LOOP_TIME; // Korrekturfaktor Anzahl der Runde
 #define RUN_ON_TIME 30
 #endif
 
+// HElligkeit der Balkenanzeige
 #define BRIGHTNESS 10
 
 // calculating constants
-const byte PUMP_LAP_COUNT = RUN_ON_TIME * LOOP_COR_FACT;  // NAchlaufzeit der Pumpe in loop zyklen
+// Nachlaufzeit der Pumpe in loop zyklen
+const byte PUMP_LAP_COUNT = RUN_ON_TIME * LOOP_COR_FACT;  
 
 // Autoreset, nach dieser Anzahl der Runden wird
-// der Watchdog nicht mehr getriggert und das System rebootet
+// der Watchdog nicht mehr getriggert und das System rebootet automatisch
 #ifdef debug
 const byte MAX_AUTO_RESTART = 60 * LOOP_COR_FACT;
 #else
 const byte MAX_AUTO_RESTART = 60 * 60 * LOOP_COR_FACT;
 #endif
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_STRIP_COUNT, LED_STRIP, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_STRIP_COUNT, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
 
 void setup() {
   // Ausgänge definieren
@@ -88,11 +100,13 @@ void setup() {
   pumpOff();
   ledOff();
 
+  // Watchdog einschalten
   wdt_enable(WDTO_4S);
 
+  // Anzeige initialisieren
   strip.begin();
   strip.setBrightness(BRIGHTNESS);
-  strip.show(); // Initialize all pixels to 'off'
+  strip.show();
 }
 
 // automatische Resetzeit
@@ -109,17 +123,17 @@ void loop() {
   doAutoRestart();
   // alle Sensoren und Taster/Schalter lesen
   readAllInputs();
-  // Anzeigen verarbeiten
+  // Sensoren verarbeiten
   doTankFull(tkFull);
   doFilterFull(flFull);
 
   // manueller Override der Pumpe
   doManualPump();
-  // do the automatic pump operation
+  // automatisches Pumpen
   doAutoPump();
-
+  // Ausgabe der aktuellen Messungen auf dem Balken
   doStrip();
-
+  // mindest Wartezeit eines Durchlauf
   delay(LOOP_TIME);
 }
 
