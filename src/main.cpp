@@ -1,7 +1,7 @@
 /*
    Diese kleine Programm dient dazu eine Wassertonne mit Vorfilteranlage zu
    steuern. Folgende Funktionen übernimmt das Programm.
-  
+
   Version 2
    - Wenn Vorfilter voll und Hauptspeicher nicht voll, starten einer Wasserpumpe
    mit Nachlaufzeit.
@@ -25,10 +25,12 @@
    - eigene Platine
 */
 #include "main.h"
-#include <avr/wdt.h>
-#include "Arduino.h"
+
 #include <Adafruit_NeoPixel.h>
-#define debug
+#include <avr/wdt.h>
+
+#include "Arduino.h"
+//#define debug
 
 // Hardware Arduino Uno -> Zielplatform TinyTPS mit D1 Relais
 // Din  0 1 2 3
@@ -42,7 +44,7 @@ const byte LED_PUMP = 5;         // LED parallel zur Pumpe
 const byte LED_TANK_FULL = 6;    // LED zeigt den Speicherstatus an
 const byte LED_FILTER_FULL = 9;  // LED zeigt den Filterstand an
 const byte LED_AUTO = 7;         // LED für utomatikmodus
-const byte LED_STRIP_PIN = 8;        // LED Zeile für die analoge Level Ausgabe
+const byte LED_STRIP_PIN = 8;    // LED Zeile für die analoge Level Ausgabe
 // Eingänge
 const byte SEN_TANK_FULL = 0;    // Sensor Tank voll
 const byte SEN_FILTER_FULL = 1;  // Sensor Vorfilter voll
@@ -55,15 +57,18 @@ const byte LED_STRIP_COUNT = 8;
 
 // Mindestverzögerung einer Loop in msec
 // Die eigentliche Verarbeitung im Programm wird bei dieser Zeit nicht berücksichtigt
-#define LOOP_TIME 250
+#define LOOP_TIME 100
+const word ERR_LVL = 100;
+const word MIN_LVL = 220;
+const word MAX_LVL = 660;
 
 // Korrekturfaktor Anzahl der Runden pro Sekunde
-const byte LOOP_COR_FACT = 1000 / LOOP_TIME; 
+const byte LOOP_COR_FACT = 1000 / LOOP_TIME;
 // Nachlaufzeit der Pumpe in Sekunden
 #ifdef debug
 #define RUN_ON_TIME 3
 #else
-#define RUN_ON_TIME 30
+#define RUN_ON_TIME 15
 #endif
 
 // HElligkeit der Balkenanzeige
@@ -71,14 +76,14 @@ const byte LOOP_COR_FACT = 1000 / LOOP_TIME;
 
 // calculating constants
 // Nachlaufzeit der Pumpe in loop zyklen
-const byte PUMP_LAP_COUNT = RUN_ON_TIME * LOOP_COR_FACT;  
+const byte PUMP_LAP_COUNT = RUN_ON_TIME * LOOP_COR_FACT;
 
 // Autoreset, nach dieser Anzahl der Runden wird
 // der Watchdog nicht mehr getriggert und das System rebootet automatisch
 #ifdef debug
-const byte MAX_AUTO_RESTART = 60 * LOOP_COR_FACT;
+const word MAX_AUTO_RESTART = 60 * LOOP_COR_FACT;
 #else
-const byte MAX_AUTO_RESTART = 60 * 60 * LOOP_COR_FACT;
+const word MAX_AUTO_RESTART = 60 * 60 * LOOP_COR_FACT;
 #endif
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_STRIP_COUNT, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
@@ -115,6 +120,7 @@ byte c = 0;
 
 bool tkFull, flFull, atMode, mnPump, pump;
 bool svPump;
+bool lvlerr;
 byte ppCounter;
 byte tkLvl;
 
@@ -140,8 +146,8 @@ void loop() {
 // do the automatic pump operation
 void doAutoPump() {
   digitalWrite(LED_AUTO, !atMode);
-  if(atMode && !mnPump) {
-    if(flFull && !tkFull) {
+  if(atMode) {
+    if((flFull || mnPump) && !tkFull) {
       ppCounter = PUMP_LAP_COUNT;
     }
     if(ppCounter > 0) {
@@ -157,15 +163,17 @@ void doAutoPump() {
 
 // manueller Override der Pumpe
 void doManualPump() {
-  if(mnPump) {
-    if(!svPump) {
-      pumpOn();
-      svPump = true;
-    }
-  } else {
-    if(svPump) {
-      pumpOff();
-      svPump = false;
+  if(!atMode) {
+    if(mnPump) {
+      if(!svPump) {
+        pumpOn();
+        svPump = true;
+      }
+    } else {
+      if(svPump) {
+        pumpOff();
+        svPump = false;
+      }
     }
   }
 }
@@ -198,8 +206,16 @@ void doAutoRestart() {
 }
 
 byte getTankLevel() {
+  lvlerr = false;
   word lvl = analogRead(SEN_TANK_FLOAT);
-  return byte(map(lvl, 0, 1024, 0, 100));
+  if(lvl < ERR_LVL) {
+    lvlerr = true;
+    return 0;
+  }
+  if(lvl < MIN_LVL) {
+    return 0;
+  }
+  return byte(map(lvl, MIN_LVL, MAX_LVL, 0, 100));
 }
 
 // schalte Pumpe aus
@@ -243,19 +259,30 @@ void doTankFull(bool full) { digitalWrite(LED_TANK_FULL, full); }
 void doFilterFull(bool full) { digitalWrite(LED_FILTER_FULL, full); }
 
 void doStrip() {
-  byte lvl = map(tkLvl, 0, 100, 0, LED_STRIP_COUNT);
-  for (byte i = 0; i < LED_STRIP_COUNT; i++) {
-    if (i <= lvl) {
-      strip.setPixelColor(LED_STRIP_COUNT-i-1, strip.Color(0,255,0));
-    } else {
-      strip.setPixelColor(LED_STRIP_COUNT-i-1, 0);
+  if(lvlerr) {
+    strip.setPixelColor(1, strip.Color(255, 0, 0));
+  } else {
+    byte lvl = map(tkLvl, 0, 100, 0, LED_STRIP_COUNT);
+    for(byte i = 0; i < LED_STRIP_COUNT; i++) {
+      if(lvlerr) {
+        strip.setPixelColor(LED_STRIP_COUNT - i - 1, strip.Color(255, 0, 0));
+      } else {
+        if(i <= lvl) {
+          strip.setPixelColor(LED_STRIP_COUNT - i - 1, strip.Color(0, 255, 0));
+        } else {
+          strip.setPixelColor(LED_STRIP_COUNT - i - 1, 0);
+        }
+      }
     }
   }
-  if (flFull) {
-      strip.setPixelColor(0, strip.Color(255,0,0));
+  if(tkFull) {
+    strip.setPixelColor(0, strip.Color(255, 0, 0));
   }
-  if (pump) {
-      strip.setPixelColor(LED_STRIP_COUNT-1, strip.Color(0,0,255));
+  if(flFull) {
+    strip.setPixelColor(0, strip.Color(255, 0, 0));
+  }
+  if(pump) {
+    strip.setPixelColor(LED_STRIP_COUNT - 1, strip.Color(0, 0, 255));
   }
   strip.show();
 }
