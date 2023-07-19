@@ -24,8 +24,6 @@
    - Piezo-Wasserstandssensor
    - eigene Platine
 */
-#include "main.h"
-
 #include <Adafruit_NeoPixel.h>
 #include <avr/wdt.h>
 
@@ -90,6 +88,24 @@ const long MAX_AUTO_RESTART = 60L * 60L * LOOP_COR_FACT;
 const byte MAX_LVLS = 7;
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_STRIP_COUNT, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
+
+void doAutoPump();
+void doManualPump();
+void readAllInputs();
+void doAutoRestart();
+byte getTankLevel();
+void pumpOff();
+void pumpOn();
+void ledOff();
+bool isTankFull();
+bool isFilterFull();
+bool isAutoMode();
+bool isManualPump();
+void doPump(bool);
+void doTankFull(bool);
+void doFilterFull(bool);
+void doStrip();
+byte getAverage(byte);
 
 void setup() {
   // Ausgänge definieren
