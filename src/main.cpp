@@ -30,7 +30,7 @@
 #include <avr/wdt.h>
 
 #include "Arduino.h"
-//#define debug
+// #define debug
 
 // Hardware Arduino Uno -> Zielplatform TinyTPS mit D1 Relais
 // Din  0 1 2 3
@@ -71,7 +71,7 @@ const byte LOOP_COR_FACT = 1000 / LOOP_TIME;
 #define RUN_ON_TIME 15
 #endif
 
-// HElligkeit der Balkenanzeige
+// Helligkeit der Balkenanzeige
 #define BRIGHTNESS 10
 
 // calculating constants
@@ -81,10 +81,13 @@ const byte PUMP_LAP_COUNT = RUN_ON_TIME * LOOP_COR_FACT;
 // Autoreset, nach dieser Anzahl der Runden wird
 // der Watchdog nicht mehr getriggert und das System rebootet automatisch
 #ifdef debug
-const word MAX_AUTO_RESTART = 60 * LOOP_COR_FACT;
+const long MAX_AUTO_RESTART = 60 * LOOP_COR_FACT;
 #else
-const word MAX_AUTO_RESTART = 60 * 60 * LOOP_COR_FACT;
+const long MAX_AUTO_RESTART = 60L * 60L * LOOP_COR_FACT;
 #endif
+
+// anzahl der gespeicherten Levelwerte
+const byte MAX_LVLS = 7;
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_STRIP_COUNT, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -123,6 +126,8 @@ bool svPump;
 bool lvlerr;
 byte ppCounter;
 byte tkLvl;
+byte lvls[MAX_LVLS];
+byte pos;
 
 void loop() {
   // WatchDog verarbeiten
@@ -141,6 +146,11 @@ void loop() {
   doStrip();
   // mindest Wartezeit eines Durchlauf
   delay(LOOP_TIME);
+
+  for(byte i = 0; i < MAX_LVLS; i++) {
+    lvls[i] = 0;
+  }
+  pos = 0;
 }
 
 // do the automatic pump operation
@@ -205,6 +215,7 @@ void doAutoRestart() {
   }
 }
 
+// getting the average tank level
 byte getTankLevel() {
   lvlerr = false;
   word lvl = analogRead(SEN_TANK_FLOAT);
@@ -215,7 +226,33 @@ byte getTankLevel() {
   if(lvl < MIN_LVL) {
     return 0;
   }
-  return byte(map(lvl, MIN_LVL, MAX_LVL, 0, 100));
+  byte percent = byte(map(lvl, MIN_LVL, MAX_LVL, 0, 100));
+  return getAverage(percent);
+}
+
+// calculate the average without the min and max value of the last n level measurements
+byte getAverage(byte newValue) {
+  lvls[pos] = newValue;
+  // next position within the array
+  pos = byte(((pos+1) % MAX_LVLS));
+  // building the average
+  word sum = 0;
+  byte min, max;
+  min = 100;  max  = 0;
+  // sum all up, determine min and max
+  for (byte i = 0; i < MAX_LVLS; i++) {
+    sum += lvls[i];
+    if (lvls[i] < min) {
+      min = lvls[i];
+    }
+    if (lvls[i] > max) {
+      max = lvls[i];
+    }
+  }
+  // remove the min and the max from the sum
+  sum -= (min + max);
+  // build average, divide the sum with the count of measurepoints minus 2 (min and max)
+  return byte(sum / (MAX_LVLS-2));
 }
 
 // schalte Pumpe aus

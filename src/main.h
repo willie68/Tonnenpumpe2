@@ -16,3 +16,4 @@ void doPump(bool);
 void doTankFull(bool);
 void doFilterFull(bool);
 void doStrip();
+byte getAverage(byte);
