@@ -8,7 +8,7 @@
    - Pumpe wird direkt ausgeschaltet, wenn Hauptspeicher voll.
    - Watchdog falls System in einem undefinerten Zustand gerät.
    - Anzeige der Füllung auf einee Balkenanzeige (8x RGB LEDs)
-   - neuer Wasserstandssensor mit Piezo
+   - neuer Wasserstandssensor mit Piezo (4ma-20mA)
 
    Historie
    WKLA 13.07.2018
