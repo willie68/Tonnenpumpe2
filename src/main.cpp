@@ -57,8 +57,8 @@ const byte LED_STRIP_COUNT = 8;
 // Die eigentliche Verarbeitung im Programm wird bei dieser Zeit nicht berücksichtigt
 #define LOOP_TIME 100
 const word ERR_LVL = 100;
-const word MIN_LVL = 220;
-const word MAX_LVL = 660;
+const word MIN_LVL = 220; // Wert von 4mA für den 0-Punkt
+const word MAX_LVL = 942; // 1024 / 5 * 4,6 = 942   1024 = 10 Bit A/D Auflösung = 5V (Referenzspannung) 4.6V gemessen bei max. Pegel
 
 // Korrekturfaktor Anzahl der Runden pro Sekunde
 const byte LOOP_COR_FACT = 1000 / LOOP_TIME;
