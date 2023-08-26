@@ -40,15 +40,15 @@
 const byte OUT_PUMP = 4;         // Ausgang für das Pumprelais
 const byte LED_PUMP = 5;         // LED parallel zur Pumpe
 const byte LED_TANK_FULL = 6;    // LED zeigt den Speicherstatus an
-const byte LED_FILTER_FULL = 9;  // LED zeigt den Filterstand an
 const byte LED_AUTO = 7;         // LED für Automatikmodus
 const byte LED_STRIP_PIN = 8;    // LED Zeile für die analoge Level Ausgabe
+const byte LED_FILTER_FULL = 9;  // LED zeigt den Filterstand an
 // Eingänge
 const byte SEN_TANK_FULL = 0;    // Sensor Tank voll
 const byte SEN_FILTER_FULL = 1;  // Sensor Vorfilter voll
-const byte SWT_PUMP_MAN = 10;    // Taster manueller Pumpen Betrieb: active = low
 const byte SWT_AUTO_MAN = 2;     // Schalter manueller Betrieb: low = man / high = auto
 const byte SEN_TANK_FLOAT = A3;  // Sensor Tank analoges Signal zur Tankfüllung
+const byte SWT_PUMP_MAN = 10;    // Taster manueller Pumpen Betrieb: active = low
 
 // Anzahl der LEDs im Balken
 const byte LED_STRIP_COUNT = 8;
