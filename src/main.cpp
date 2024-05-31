@@ -28,7 +28,8 @@
 #include <avr/wdt.h>
 
 #include "Arduino.h"
-// #define debug
+#define ledstripe
+//#define debug
 
 // Hardware Arduino Uno -> Zielplattform TinyTPS mit D1 Relais
 // Din  0 1 2 3
@@ -61,7 +62,7 @@ const word MIN_LVL = 220; // Wert von 4mA für den 0-Punkt
 const word MAX_LVL = 942; // 1024 / 5 * 4,6 = 942   1024 = 10 Bit A/D Auflösung = 5V (Referenzspannung) 4.6V gemessen bei max. Pegel
 
 // Korrekturfaktor Anzahl der Runden pro Sekunde
-const byte LOOP_COR_FACT = 1000 / LOOP_TIME;
+const long LOOP_COR_FACT = 1000 / LOOP_TIME; 
 // Nachlaufzeit der Pumpe in Sekunden
 #ifdef debug
 #define RUN_ON_TIME 3
@@ -87,7 +88,13 @@ const long MAX_AUTO_RESTART = 60L * 60L * LOOP_COR_FACT;
 // Anzahl der gespeicherten Levelwerte
 const byte MAX_LVLS = 7;
 
+#ifdef ledstripe
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_STRIP_COUNT, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
+uint32_t LED_BLACK = strip.Color(0,0,0);
+uint32_t LED_GREEN = strip.Color(0,255,0);
+uint32_t LED_RED = strip.Color(255,0,0);
+uint32_t LED_BLUE = strip.Color(0,0,255);
+#endif
 
 void doAutoPump();
 void doManualPump();
@@ -114,6 +121,7 @@ void setup() {
   pinMode(LED_TANK_FULL, OUTPUT);
   pinMode(LED_FILTER_FULL, OUTPUT);
   pinMode(LED_AUTO, OUTPUT);
+  pinMode(LED_STRIP_PIN, OUTPUT);
   // Eingänge definieren
   pinMode(SEN_TANK_FULL, INPUT_PULLUP);
   pinMode(SEN_FILTER_FULL, INPUT_PULLUP);
@@ -128,9 +136,11 @@ void setup() {
   wdt_enable(WDTO_4S);
 
   // Anzeige initialisieren
+  #ifdef ledstripe
   strip.begin();
   strip.setBrightness(BRIGHTNESS);
   strip.show();
+  #endif
 }
 
 // automatische Resetzeit
@@ -167,6 +177,9 @@ void loop() {
     lvls[i] = 0;
   }
   pos = 0;
+  #ifndef ledstripe
+  digitalWrite(LED_STRIP_PIN, !digitalRead(LED_STRIP_PIN));
+  #endif
 }
 
 // do the automatic pump operation
@@ -283,8 +296,10 @@ void ledOff() {
   digitalWrite(LED_TANK_FULL, 0);
   digitalWrite(LED_FILTER_FULL, 0);
   digitalWrite(LED_AUTO, 0);
+  #ifdef ledstripe
   strip.clear();
   strip.show();
+  #endif
 }
 
 // Ist die Hauptwassertonne schon voll?
@@ -315,27 +330,30 @@ void doStrip() {
   if(lvlerr) {
     strip.setPixelColor(1, strip.Color(255, 0, 0));
   } else {
-    byte lvl = map(tkLvl, 0, 100, 0, LED_STRIP_COUNT);
-    for(byte i = 0; i < LED_STRIP_COUNT; i++) {
-      if(lvlerr) {
-        strip.setPixelColor(LED_STRIP_COUNT - i - 1, strip.Color(255, 0, 0));
-      } else {
-        if(i <= lvl) {
-          strip.setPixelColor(LED_STRIP_COUNT - i - 1, strip.Color(0, 255, 0));
-        } else {
-          strip.setPixelColor(LED_STRIP_COUNT - i - 1, 0);
-        }
-      }
+  #ifdef ledstripe
+  int8_t lvl = map(tkLvl, 0, 100, -1, 5);
+  for (int8_t i = 0; i < 5; i++) {
+    if (i <= lvl) {
+      strip.setPixelColor(LED_STRIP_COUNT-i-1, LED_GREEN);
+    } else {
+      strip.setPixelColor(LED_STRIP_COUNT-i-1, LED_BLACK);
     }
   }
-  if(tkFull) {
-    strip.setPixelColor(0, strip.Color(255, 0, 0));
+  for(byte i = 0; i<3;i++) {
+    strip.setPixelColor(i,strip.Color(32,32,32));
   }
-  if(flFull) {
-    strip.setPixelColor(0, strip.Color(255, 0, 0));
+  if (tkFull) {
+      strip.setPixelColor(0, LED_RED);
+  }
+  if (flFull) {
+      strip.setPixelColor(1, LED_RED);
+  }
+  if (pump || mnPump) {
+      strip.setPixelColor(2, LED_GREEN);
   }
   if(pump) {
     strip.setPixelColor(LED_STRIP_COUNT - 1, strip.Color(0, 0, 255));
   }
   strip.show();
+  #endif
 }
