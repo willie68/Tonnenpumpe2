@@ -23,13 +23,24 @@
    - Version 2 für ATTiny84
    - Piezo-Wasserstandstsensor
    - eigene Platine
+
+   WKLA 01.06.2024
+   - Anpassungen
+   - neues Layout für das LED Band: 
+     LED 1-3: Poweranzeige
+     LED 1:   Tank voll -> ROT
+     LED 2:   Filter voll -> ROT
+     LED 3:   Pumpen -> Grün
+     LED4-8:  5 stufige Anzeige des Füllgrades grün, LED 8: Sensorfehler -> Rot
+   - Bug in Mittelwertbildung behoben.
+   - Tank voll, sofort Pumpende 
 */
 #include <Adafruit_NeoPixel.h>
 #include <avr/wdt.h>
 
 #include "Arduino.h"
 #define ledstripe
-//#define debug
+// #define debug
 
 // Hardware Arduino Uno -> Zielplattform TinyTPS mit D1 Relais
 // Din  0 1 2 3
@@ -58,11 +69,11 @@ const byte LED_STRIP_COUNT = 8;
 // Die eigentliche Verarbeitung im Programm wird bei dieser Zeit nicht berücksichtigt
 #define LOOP_TIME 100
 const word ERR_LVL = 100;
-const word MIN_LVL = 220; // Wert von 4mA für den 0-Punkt
-const word MAX_LVL = 942; // 1024 / 5 * 4,6 = 942   1024 = 10 Bit A/D Auflösung = 5V (Referenzspannung) 4.6V gemessen bei max. Pegel
+const word MIN_LVL = 220;  // Wert von 4mA für den 0-Punkt
+const word MAX_LVL = 942;  // 1024 / 5 * 4,6 = 942   1024 = 10 Bit A/D Auflösung = 5V (Referenzspannung) 4.6V gemessen bei max. Pegel
 
 // Korrekturfaktor Anzahl der Runden pro Sekunde
-const long LOOP_COR_FACT = 1000 / LOOP_TIME; 
+const long LOOP_COR_FACT = 1000 / LOOP_TIME;
 // Nachlaufzeit der Pumpe in Sekunden
 #ifdef debug
 #define RUN_ON_TIME 3
@@ -87,13 +98,15 @@ const long MAX_AUTO_RESTART = 60L * 60L * LOOP_COR_FACT;
 
 // Anzahl der gespeicherten Levelwerte
 const byte MAX_LVLS = 7;
+byte lvls[MAX_LVLS];
+byte pos;
 
 #ifdef ledstripe
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_STRIP_COUNT, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
-uint32_t LED_BLACK = strip.Color(0,0,0);
-uint32_t LED_GREEN = strip.Color(0,255,0);
-uint32_t LED_RED = strip.Color(255,0,0);
-uint32_t LED_BLUE = strip.Color(0,0,255);
+uint32_t LED_BLACK = strip.Color(0, 0, 0);
+uint32_t LED_GREEN = strip.Color(0, 255, 0);
+uint32_t LED_RED = strip.Color(255, 0, 0);
+uint32_t LED_BLUE = strip.Color(0, 0, 255);
 #endif
 
 void doAutoPump();
@@ -135,12 +148,17 @@ void setup() {
   // Watchdog einschalten
   wdt_enable(WDTO_4S);
 
-  // Anzeige initialisieren
-  #ifdef ledstripe
+  for(byte i = 0; i < MAX_LVLS; i++) {
+    lvls[i] = 0;
+  }
+  pos = 0;
+
+// Anzeige initialisieren
+#ifdef ledstripe
   strip.begin();
   strip.setBrightness(BRIGHTNESS);
   strip.show();
-  #endif
+#endif
 }
 
 // automatische Resetzeit
@@ -152,8 +170,6 @@ bool svPump;
 bool lvlerr;
 byte ppCounter;
 byte tkLvl;
-byte lvls[MAX_LVLS];
-byte pos;
 
 void loop() {
   // WatchDog verarbeiten
@@ -173,13 +189,9 @@ void loop() {
   // Mindestwartezeit eines Durchlauf
   delay(LOOP_TIME);
 
-  for(byte i = 0; i < MAX_LVLS; i++) {
-    lvls[i] = 0;
-  }
-  pos = 0;
-  #ifndef ledstripe
+#ifndef ledstripe
   digitalWrite(LED_STRIP_PIN, !digitalRead(LED_STRIP_PIN));
-  #endif
+#endif
 }
 
 // do the automatic pump operation
@@ -188,6 +200,9 @@ void doAutoPump() {
   if(atMode) {
     if((flFull || mnPump) && !tkFull) {
       ppCounter = PUMP_LAP_COUNT;
+    }
+    if (tkFull) {
+      ppCounter = 0;
     }
     if(ppCounter > 0) {
       pump = true;
@@ -263,25 +278,26 @@ byte getTankLevel() {
 byte getAverage(byte newValue) {
   lvls[pos] = newValue;
   // next position within the array
-  pos = byte(((pos+1) % MAX_LVLS));
+  pos = byte(((pos + 1) % MAX_LVLS));
   // building the average
   word sum = 0;
   byte min, max;
-  min = 100;  max  = 0;
+  min = 100;
+  max = 0;
   // sum all up, determine min and max
-  for (byte i = 0; i < MAX_LVLS; i++) {
+  for(byte i = 0; i < MAX_LVLS; i++) {
     sum += lvls[i];
-    if (lvls[i] < min) {
+    if(lvls[i] < min) {
       min = lvls[i];
     }
-    if (lvls[i] > max) {
+    if(lvls[i] > max) {
       max = lvls[i];
     }
   }
   // remove the min and the max from the sum
   sum -= (min + max);
   // build average, divide the sum with the count of measure points minus 2 (min and max)
-  return byte(sum / (MAX_LVLS-2));
+  return byte(sum / (MAX_LVLS - 2));
 }
 
 // schalte Pumpe aus
@@ -296,10 +312,10 @@ void ledOff() {
   digitalWrite(LED_TANK_FULL, 0);
   digitalWrite(LED_FILTER_FULL, 0);
   digitalWrite(LED_AUTO, 0);
-  #ifdef ledstripe
+#ifdef ledstripe
   strip.clear();
   strip.show();
-  #endif
+#endif
 }
 
 // Ist die Hauptwassertonne schon voll?
@@ -327,33 +343,34 @@ void doTankFull(bool full) { digitalWrite(LED_TANK_FULL, full); }
 void doFilterFull(bool full) { digitalWrite(LED_FILTER_FULL, full); }
 
 void doStrip() {
+#ifdef ledstripe
+  for(byte i = 0; i < 3; i++) {
+    strip.setPixelColor(i, strip.Color(32, 32, 32));
+  }
   if(lvlerr) {
-    strip.setPixelColor(1, strip.Color(255, 0, 0));
+    for(int8_t i = 0; i < 5; i++) {
+      strip.setPixelColor(LED_STRIP_COUNT - i - 1, LED_BLACK);
+    }
+      strip.setPixelColor(7, LED_RED);
   } else {
-  #ifdef ledstripe
-  int8_t lvl = map(tkLvl, 0, 100, -1, 5);
-  for (int8_t i = 0; i < 5; i++) {
-    if (i <= lvl) {
-      strip.setPixelColor(LED_STRIP_COUNT-i-1, LED_GREEN);
-    } else {
-      strip.setPixelColor(LED_STRIP_COUNT-i-1, LED_BLACK);
+    int8_t lvl = map(tkLvl, 0, 100, -1, 5);
+    for(int8_t i = 0; i < 5; i++) {
+      if(i <= lvl) {
+        strip.setPixelColor(LED_STRIP_COUNT - i - 1, LED_GREEN);
+      } else {
+        strip.setPixelColor(LED_STRIP_COUNT - i - 1, LED_BLACK);
+      }
     }
   }
-  for(byte i = 0; i<3;i++) {
-    strip.setPixelColor(i,strip.Color(32,32,32));
+  if(tkFull) {
+    strip.setPixelColor(0, LED_RED);
   }
-  if (tkFull) {
-      strip.setPixelColor(0, LED_RED);
+  if(flFull) {
+    strip.setPixelColor(1, LED_RED);
   }
-  if (flFull) {
-      strip.setPixelColor(1, LED_RED);
-  }
-  if (pump || mnPump) {
-      strip.setPixelColor(2, LED_GREEN);
-  }
-  if(pump) {
-    strip.setPixelColor(LED_STRIP_COUNT - 1, strip.Color(0, 0, 255));
+  if(pump || mnPump) {
+    strip.setPixelColor(2, LED_GREEN);
   }
   strip.show();
-  #endif
+#endif
 }
