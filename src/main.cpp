@@ -126,6 +126,7 @@ void doTankFull(bool);
 void doFilterFull(bool);
 void doStrip();
 byte getAverage(byte);
+void initAvr();
 
 void setup() {
   // Ausgänge definieren
@@ -148,10 +149,7 @@ void setup() {
   // Watchdog einschalten
   wdt_enable(WDTO_4S);
 
-  for(byte i = 0; i < MAX_LVLS; i++) {
-    lvls[i] = 0;
-  }
-  pos = 0;
+  initAvr();
 
 // Anzeige initialisieren
 #ifdef ledstripe
@@ -298,6 +296,14 @@ byte getAverage(byte newValue) {
   sum -= (min + max);
   // build average, divide the sum with the count of measure points minus 2 (min and max)
   return byte(sum / (MAX_LVLS - 2));
+}
+
+// initialise the average building array
+void initAvr() {
+    for(byte i = 0; i < MAX_LVLS; i++) {
+    lvls[i] = 0;
+  }
+  pos = 0;
 }
 
 // schalte Pumpe aus
