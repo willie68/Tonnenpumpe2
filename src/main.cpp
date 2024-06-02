@@ -369,13 +369,13 @@ void doStrip() {
     }
   }
   if(tkFull) {
-    strip.setPixelColor(0, LED_RED);
+    strip.setPixelColor(2, LED_RED);
   }
   if(flFull) {
     strip.setPixelColor(1, LED_RED);
   }
   if(pump || mnPump) {
-    strip.setPixelColor(2, LED_GREEN);
+    strip.setPixelColor(0, LED_GREEN);
   }
   strip.show();
 #endif
