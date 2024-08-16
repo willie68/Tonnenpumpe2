@@ -3,14 +3,27 @@
    steuern. Folgende Funktionen übernimmt das Programm.
 
   Version 2
-   - Wenn Vorfilter voll und Hauptspeicher nicht voll, starten einer Wasserpumpe
-   mit Nachlaufzeit.
+   - Wenn Vorfilter voll und Hauptspeicher nicht voll, starten einer Wasserpumpe mit Nachlaufzeit.
    - Pumpe wird direkt ausgeschaltet, wenn Hauptspeicher voll.
    - Watchdog falls System in einem undefinierten Zustand gerät.
    - Anzeige der Füllung auf eine Balkenanzeige (8x RGB LEDs)
    - neuer Wasserstandstsensor mit Piezo (4ma-20mA)
 
    Historie
+   WKLA 16.08.2024
+   - Hardwarewatchdog mit Digispark, Heartbeat auf Pump LED
+
+   WKLA 01.06.2024
+   - Anpassungen
+   - neues Layout für das LED Band: 
+     LED 1-3: Poweranzeige
+     LED 1:   Tank voll -> ROT
+     LED 2:   Filter voll -> ROT
+     LED 3:   Pumpen -> Grün
+     LED4-8:  5 stufige Anzeige des Füllgrades grün, LED 8: Sensorfehler -> Rot
+   - Bug in Mittelwertbildung behoben.
+   - Tank voll, sofort Pumpende 
+   
    WKLA 13.07.2018
    - Watchdog implementiert
    - verschiedene Zeitkonstanten für Debug und nicht Debug version
@@ -23,17 +36,6 @@
    - Version 2 für ATTiny84
    - Piezo-Wasserstandstsensor
    - eigene Platine
-
-   WKLA 01.06.2024
-   - Anpassungen
-   - neues Layout für das LED Band: 
-     LED 1-3: Poweranzeige
-     LED 1:   Tank voll -> ROT
-     LED 2:   Filter voll -> ROT
-     LED 3:   Pumpen -> Grün
-     LED4-8:  5 stufige Anzeige des Füllgrades grün, LED 8: Sensorfehler -> Rot
-   - Bug in Mittelwertbildung behoben.
-   - Tank voll, sofort Pumpende 
 */
 #include <Adafruit_NeoPixel.h>
 #include <avr/wdt.h>
@@ -127,6 +129,7 @@ void doFilterFull(bool);
 void doStrip();
 byte getAverage(byte);
 void initAvr();
+void heartbeat();
 
 void setup() {
   // Ausgänge definieren
@@ -184,8 +187,11 @@ void loop() {
   doAutoPump();
   // Ausgabe der aktuellen Messungen auf dem Balken
   doStrip();
+  // heartbeat für hardware watchdog
+  heartbeat();
   // Mindestwartezeit eines Durchlauf
   delay(LOOP_TIME);
+
 
 #ifndef ledstripe
   digitalWrite(LED_STRIP_PIN, !digitalRead(LED_STRIP_PIN));
@@ -347,6 +353,17 @@ void doTankFull(bool full) { digitalWrite(LED_TANK_FULL, full); }
 
 // Signal LED "Vorfilter voll" de/aktivieren
 void doFilterFull(bool full) { digitalWrite(LED_FILTER_FULL, full); }
+
+unsigned long saved = 0;
+void heartbeat() {
+  if (millis() > saved) {
+    saved = millis() + 1000;
+    bool tmp = digitalRead(LED_PUMP);
+    digitalWrite(LED_PUMP, !tmp);
+    delay(10);
+    digitalWrite(LED_PUMP, tmp);
+  }
+}
 
 void doStrip() {
 #ifdef ledstripe
